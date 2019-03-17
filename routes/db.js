@@ -47,7 +47,7 @@ function getSales(filters, callback){
     WHERE servername=?
     AND string=?
     AND \`FROM_UNIXTIME(time)\` BETWEEN ? AND ?
-    GROUP BY DATE (time), HOUR(time);`,
+    GROUP BY DATE (time), HOUR(time) ORDER BY time ASC;`,
     [`${filters.server}`, `${filters.item}`, `${filters.startDate}`, `${filters.endDate}`],
     function(err, result){
       if(err) throw err;
@@ -102,7 +102,7 @@ router.post('/itemSearch', function(req, res){
 router.post('/itemSalesHistory', function(req, res){
   getTopItemSellers(req.body, function(result){
     res.json(result)
-    console.log(result)
+    //console.log(result)
   })
   
 })
