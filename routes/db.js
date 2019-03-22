@@ -9,23 +9,23 @@ let getTopItemSellers =
 `SELECT name, sum(price)/10000 AS price, sum(quantity) AS quantity FROM history_item_view
 WHERE servername=?
 AND string=?
-AND \`FROM_UNIXTIME(time)\` BETWEEN ? AND ?
+AND FROM_UNIXTIME(time) BETWEEN ? AND ?
 GROUP BY name ORDER BY sum(quantity) DESC LIMIT 10;`,
 getSales = 
-`SELECT \`FROM_UNIXTIME(time)\`as time, AVG(price/quantity)/10000 as price, AVG(quantity) as quantity FROM history_item_view 
+`SELECT time, AVG(price/quantity)/10000 as price, AVG(quantity) as quantity FROM history_item_view 
 WHERE servername=?
 AND string=?
-AND \`FROM_UNIXTIME(time)\` BETWEEN ? AND ?
-GROUP BY DATE (time), HOUR(time) ORDER BY time ASC;`,
+AND FROM_UNIXTIME(time) BETWEEN ? AND ?
+GROUP BY DATE (FROM_UNIXTIME(time)), HOUR(FROM_UNIXTIME(time)) ORDER BY FROM_UNIXTIME(time) ASC;`,
 getTotalMarketValue = 
 `SELECT sum(price) as total FROM history_item_view 
 WHERE servername=?
-AND \`FROM_UNIXTIME(time)\` BETWEEN ? AND ?`,
+AND FROM_UNIXTIME(time) BETWEEN ? AND ?`,
 getTotalItemMarketValue = 
 `SELECT sum(price) as total FROM history_item_view
 WHERE servername=?
 AND string=?
-AND \`FROM_UNIXTIME(time)\` BETWEEN ? AND ?`,
+AND FROM_UNIXTIME(time) BETWEEN ? AND ?`,
 serverinfo =  
 `SELECT servername as 'server', count(*)as 'sales', sum(price)/10000 as 'value' FROM history_item_view GROUP BY servername`
 topN = 
