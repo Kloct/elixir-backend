@@ -1,4 +1,6 @@
-var mysql = require('mysql')
+var mysql = require('mysql'),
+    util = require('util')
+    
 var pool = mysql.createPool({
     connectionLimit: 10,
     host: '192.168.1.16',
@@ -25,4 +27,5 @@ pool.getConnection((err, connection) => {
     return
 })
 
+pool.query = util.promisify(pool.query)
 module.exports = pool
