@@ -1,12 +1,13 @@
 var mysql = require('mysql'),
     util = require('util')
+    dbkeys = require ('../dbkys.json')
     
 var pool = mysql.createPool({
     connectionLimit: 10,
-    host: '192.168.1.16',
-    user: 'CJTV',
-    password: 'sxNNlstDm9U2w58U',
-    database: 'trade_broker'
+    host: dbkeys.host,
+    user: dbkeys.user,
+    password: dbkeys.password,
+    database: dbkeys.database
 })
 
 pool.getConnection((err, connection) => {
