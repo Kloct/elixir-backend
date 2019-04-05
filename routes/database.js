@@ -1,6 +1,6 @@
 var mysql = require('mysql'),
     util = require('util')
-    dbkeys = require ('../dbkys.json')
+    dbkeys = require ('../dbkeys.json')
     
 var pool = mysql.createPool({
     connectionLimit: 10,
