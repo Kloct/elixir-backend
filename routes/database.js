@@ -1,5 +1,5 @@
 var mysql = require('mysql'),
-    util = require('util')
+    util = require('util'),
     dbkeys = require ('../dbkeys.json')
     
 var pool = mysql.createPool({
