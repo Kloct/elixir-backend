@@ -58,6 +58,48 @@ function callGetTopItems(filters){
     })
   })
 }
+function callGetMarketValue(filters){
+  return new Promise((resolve, reject)=>{
+    pool.query(`CALL getTotalMarketValue(?, ?, ?)`, [`${filters.server}`, `${filters.startDate}`, `${filters.endDate}`] ,(err, res)=>{
+      if (err) reject(err)
+      else resolve(res)
+    })
+  })
+}
+function callSellerRank(filters){
+  return new Promise((resolve, reject)=>{
+    pool.query(`CALL sellerRank(?, ?, ?, ?)`, [`${filters.server}`, `${filters.name}`, `${filters.startDate}`, `${filters.endDate}`], (err, res)=>{
+      if (err) reject(err)
+      else resolve(res[0][0])
+    })
+  })
+}
+
+function callSellersItems(filters){
+  return new Promise((resolve, reject)=>{
+    pool.query(`CALL getSellersItems(?, ?, ?, ?)`, [`${filters.server}`, `${filters.name}`, `${filters.startDate}`, `${filters.endDate}`], (err, res)=>{
+      if (err) reject(err)
+      else resolve(res[0])
+    })
+  })
+}
+
+function callSellersTree(filters){
+  return new Promise((resolve, reject)=>{
+    pool.query(`CALL sellersTree(?, ?, ?, ?)`, [`${filters.server}`, `${filters.name}`, `${filters.startDate}`, `${filters.endDate}`], (err, res)=>{
+      if (err) reject(err)
+      else resolve(res[0])
+    })
+  })
+}
+function callGetSellersQuantities(filters){
+  return new Promise((resolve, reject)=>{
+    pool.query(`CALL getSellersQuantities(?, ?, ?, ?)`, [`${filters.server}`, `${filters.name}`, `${filters.startDate}`, `${filters.endDate}`], (err, res)=>{
+      if(err) reject(err)
+      else resolve(res[0].map(item=>[item.time, item.quantity]))
+    })
+  })
+}
 
 /*mySQL Calls*/
 async function findItem(item, res){
@@ -68,7 +110,7 @@ async function itemSalesHistory(filters, res){
   console.log(filters)
   let topSellers = await pool.query('CALL getTopItemSellers(?, ?, ?, ?)', [`${filters.server}`, `${filters.item}`, `${filters.startDate}`, `${filters.endDate}`])
   let sales = await pool.query(`CALL getSales(?, ?, ?, ?)`, [`${filters.server}`, `${filters.item}`, `${filters.startDate}`, `${filters.endDate}`])
-  let marketValue = await pool.query(`CALL getTotalMarketValue(?, ?, ?)`, [`${filters.server}`, `${filters.startDate}`, `${filters.endDate}`])
+  let marketValue = await callGetMarketValue(filters)
   let itemMarketValue = await pool.query(`CALL getTotalItemMarketValue(?, ?, ?, ?)`, [`${filters.server}`, `${filters.item}`, `${filters.startDate}`, `${filters.endDate}`])
   res.json({topN:topSellers[0], sales:sales[0], marketValue:marketValue[0], itemMarketValue:itemMarketValue[0]}); //[0] excludes okpacket
 }
@@ -112,6 +154,45 @@ async function getMarketTable(filters, res){
     topItems
   })
 }
+
+async function getSellerTable(filters, res){
+  let sellerRank = await callSellerRank(filters)
+  let marketValue = await callGetMarketValue(filters)
+  let customCategory = await callCustomCategory()
+  let quantities = await callGetSellersQuantities(filters)
+  let data = await callSellersTree(filters)
+  let sellersItems = await callSellersItems(filters)
+  customCategory = customCategory.map(category=>Object.values(category))
+  normalizedData = []
+  data.forEach(sale => {
+    if(sale.category) normalizedData.push([sale.string, sale.category, sale.total, sale.total])
+    else normalizedData.push([sale.string, sale.filtered, sale.total, sale.total])
+  });
+  let category = new Set()
+  normalizedData.forEach(item =>{
+    category.add(item[1])
+  })
+  let headers = []
+  category.forEach(category=>{
+    let customHeader = false
+    customCategory.forEach(custom=>{
+      if (custom[0].includes(category)){
+        headers.push([category, custom[1], 0, 0])
+        customHeader=true
+      }
+    })
+    if (!customHeader)headers.push([category, filters.name, 0, 0])
+  })
+  res.json({
+    revenue: sellerRank.revenue,
+    rank: sellerRank.rank,
+    percentage: (sellerRank.revenue/(marketValue[0][0].total/10000))*100,
+    sellersTree: [["Item", "Parent", "Price", "Quantity"], [filters.name, null, 0, 0], ...headers, ...normalizedData],
+    sellersItems,
+    quantities
+  })
+}
+
 /*Frontend Requests*/
 router.get('/serverinfo', function(req, res, next) {
   getInfo('CALL serverinfo', res);
@@ -129,6 +210,6 @@ router.post('/marketTable', (req, res)=>{
   getMarketTable(req.body, res)
 })
 router.post('/sellerTable', (req, res)=>{
-  getMarketTable(req.body, res)
+  getSellerTable(req.body, res)
 })
 module.exports = router;
