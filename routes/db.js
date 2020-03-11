@@ -4,6 +4,33 @@ var pool = require('./database')
 var router = express.Router();
 var app = express();
 
+function dateRangeValidate(startDate, endDate){
+  // are dates are formatted correctly
+  if (startDate.match(/^\d{4}-\d{1,}-\d{1,}$/g)&&endDate.match(/^\d{4}-\d{1,}-\d{1,}$/g)) {
+      // is startDate before endDate
+      if (new Date(startDate.split("-").map(s=>parseInt(s))) < new Date(endDate.split("-").map(s=>parseInt(s)))) {
+          return true
+      }
+  }
+  return false
+}
+
+async function validFilters(filters){
+  // if filter is not a string
+  for (let filter of Object.values(filters)){
+    if(typeof filter !== 'string') {
+      return false
+    }
+  }
+  // if server does not exist
+  let servers = await callProcedure('serverList') // make procedure
+  if (Object.values(servers).includes(filters.server)===-1) return false
+
+  // date range validate
+  if(!dateRangeValidate(filters.startDate, filters.endDate)) return false
+  return true
+}
+
 /*Actual Async Calls*/
 
 
@@ -18,7 +45,7 @@ function callCustomCategory(){
 
 function callProcedure(procedure, filters){
   return new Promise((resolve, reject)=>{
-    let filtersArr = Object.values(filters),
+    let filtersArr = filters?Object.values(filters):[],
     sql = `CALL ${procedure} (${filtersArr.map(()=>`?`).join(', ')})`
     pool.query(sql, [...filtersArr], (err, res)=>{
       if(err) reject(err)
@@ -33,17 +60,25 @@ async function findItem(item, res){
   res.json(result);
 }
 async function itemSalesHistory(filters, res){
-  // validate input
-  // does the server exist?
-  // is the date range valid
-  // is this item found in the date range
-
   let { server, item, startDate, endDate } = filters
-  let topSellers = await pool.query('CALL getTopItemSellers(?, ?, ?, ?)', [`${filters.server}`, `${filters.item}`, `${filters.startDate}`, `${filters.endDate}`])
-  let sales = await pool.query(`CALL getSales(?, ?, ?, ?)`, [`${filters.server}`, `${filters.item}`, `${filters.startDate}`, `${filters.endDate}`])
+  // validate input
+  let valid = await validFilters(filters)
+  if(!valid){
+    res.json({invalid: true})
+    return
+  }
+  //is item found in that range?
+  let sales = await callProcedure(`getSales`, filters)
+  if (sales.length===0){
+    res.json({notFound: true})
+    return
+  }
+  let topSellers = await callProcedure('getTopItemSellers', filters)
   let marketValue = await callProcedure('getTotalMarketValue', {server, startDate, endDate})
-  let itemMarketValue = await pool.query(`CALL getTotalItemMarketValue(?, ?, ?, ?)`, [`${filters.server}`, `${filters.item}`, `${filters.startDate}`, `${filters.endDate}`])
-  res.json({topN:topSellers[0], sales:sales[0], marketValue:marketValue, itemMarketValue:itemMarketValue[0]}); //[0] excludes okpacket
+  let itemMarketValue = await callProcedure(`getTotalItemMarketValue`, filters)
+  // are there items in that range?
+  
+  res.json({topN:topSellers, sales:sales, marketValue:marketValue, itemMarketValue:itemMarketValue});
 }
 async function getInfo(sql, res){
   var result = await pool.query(sql)
@@ -51,10 +86,17 @@ async function getInfo(sql, res){
 }
 async function getMarketTable(filters, res){
   // validate input
-  // does the server exist?
-  // is the date range valid?
-  
+  let valid = await validFilters(filters)
+  if(!valid){
+    res.json({invalid: true})
+    return
+  }
+
   let data = await callProcedure('marketTree', filters)
+  if (data.length===0){
+    res.json({notFound: true})
+    return
+  }
   let customCategory = await callCustomCategory()
   let quantities = await callProcedure('getQuantities', filters)
   let totals = await callProcedure('getMarketTotals', filters)
@@ -94,9 +136,12 @@ async function getMarketTable(filters, res){
 
 async function getSellerTable(filters, res){
   // validate input
-  // does the server exist?
-  // is the date range valid?
-  // is the name found in that range?
+  let valid = await validFilters(filters)
+  if(!valid){
+    res.json({invalid: true})
+    return
+  }
+  // is name found in that range?
 
   let { server, name, startDate, endDate } = filters
   let sellerRank = await callProcedure('sellerRank', filters)
@@ -105,6 +150,10 @@ async function getSellerTable(filters, res){
   let quantities = await callProcedure('getSellersQuantities', filters)
   let data = await callProcedure('sellersTree', filters)
   let sellersItems = await callProcedure('getSellersItems', filters)
+  if (sellersItems.length===0){
+    res.json({notFound: true})
+    return
+  }
   quantities = quantities.map(item=>[item.time, item.quantity])
   sellerRank = sellerRank[0]
   customCategory = customCategory.map(category=>Object.values(category))
@@ -138,28 +187,14 @@ async function getSellerTable(filters, res){
   })
 }
 
-function callItemList(){
-  return new Promise((resolve, reject)=>{
-    pool.query(`CALL itemList()`, (err, res)=>{
-      resolve(res[0].map(item=>item.string))
-    })
-  })
-}
 async function itemList(res){
-  let items = await callItemList()
-  res.json(items)
+  let items = await callProcedure('itemList')
+  res.json(items.map(item=>item.string))
 }
 
-function callSellerList(){
-  return new Promise((resolve, reject)=>{
-    pool.query(`CALL sellerList()`, (err, res)=>{
-      resolve(res[0].map(seller=>[seller.name, seller.servername]))
-    })
-  })
-}
 async function sellerList(res){
-  let sellers = await callSellerList()
-  res.json(sellers)
+  let sellers = await callProcedure('sellerList')
+  res.json(sellers.map(seller=>[seller.name, seller.servername]))
 }
 
 
