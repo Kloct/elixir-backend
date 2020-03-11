@@ -6,14 +6,6 @@ var app = express();
 
 /*Actual Async Calls*/
 
-function callMarketTree(filters){
-  return new Promise((resolve, reject)=>{
-    pool.query(`CALL marketTree(?, ?, ?)`, [filters.server, filters.startDate, filters.endDate], (err, res)=>{
-      if(err) throw err
-      resolve(res[0])
-    })
-  })   
-}
 
 function callCustomCategory(){
   return new Promise((resolve, reject)=>{
@@ -24,79 +16,13 @@ function callCustomCategory(){
   })   
 }
 
-function callGetQuantities(filters){
+function callProcedure(procedure, filters){
   return new Promise((resolve, reject)=>{
-    pool.query(`CALL getQuantities(?, ?, ?)`, [filters.server, filters.startDate, filters.endDate], (err, res)=>{
-      if(err) reject(err)
-      else resolve(res[0].map(item=>[item.time, item.quantity]))
-    })
-  })
-}
-
-function callGetMarketTotals(filters){
-  return new Promise((resolve, reject)=>{
-    pool.query(`CALL getMarketTotals(?, ?, ?)`, [filters.server, filters.startDate, filters.endDate], (err, res)=>{
-      if(err) reject(err)
-      else resolve(res[0][0])
-    })
-  })
-}
-function callGetTopSellers(filters){
-  return new Promise((resolve, reject)=>{
-    pool.query(`CALL getTopSellers(?, ?, ?)`, [filters.server, filters.startDate, filters.endDate], (err, res)=>{
+    let filtersArr = Object.values(filters),
+    sql = `CALL ${procedure} (${filtersArr.map(()=>`?`).join(', ')})`
+    pool.query(sql, [...filtersArr], (err, res)=>{
       if(err) reject(err)
       else resolve(res[0])
-    })
-  })
-}
-
-function callGetTopItems(filters){
-  return new Promise((resolve, reject)=>{
-    pool.query(`CALL getTopItems(?, ?, ?)`, [filters.server, filters.startDate, filters.endDate], (err, res)=>{
-      if(err) reject(err)
-      else resolve(res[0])
-    })
-  })
-}
-function callGetMarketValue(filters){
-  return new Promise((resolve, reject)=>{
-    pool.query(`CALL getTotalMarketValue(?, ?, ?)`, [`${filters.server}`, `${filters.startDate}`, `${filters.endDate}`] ,(err, res)=>{
-      if (err) reject(err)
-      else resolve(res)
-    })
-  })
-}
-function callSellerRank(filters){
-  return new Promise((resolve, reject)=>{
-    pool.query(`CALL sellerRank(?, ?, ?, ?)`, [`${filters.server}`, `${filters.name}`, `${filters.startDate}`, `${filters.endDate}`], (err, res)=>{
-      if (err) reject(err)
-      else resolve(res[0][0])
-    })
-  })
-}
-
-function callSellersItems(filters){
-  return new Promise((resolve, reject)=>{
-    pool.query(`CALL getSellersItems(?, ?, ?, ?)`, [`${filters.server}`, `${filters.name}`, `${filters.startDate}`, `${filters.endDate}`], (err, res)=>{
-      if (err) reject(err)
-      else resolve(res[0])
-    })
-  })
-}
-
-function callSellersTree(filters){
-  return new Promise((resolve, reject)=>{
-    pool.query(`CALL sellersTree(?, ?, ?, ?)`, [`${filters.server}`, `${filters.name}`, `${filters.startDate}`, `${filters.endDate}`], (err, res)=>{
-      if (err) reject(err)
-      else resolve(res[0])
-    })
-  })
-}
-function callGetSellersQuantities(filters){
-  return new Promise((resolve, reject)=>{
-    pool.query(`CALL getSellersQuantities(?, ?, ?, ?)`, [`${filters.server}`, `${filters.name}`, `${filters.startDate}`, `${filters.endDate}`], (err, res)=>{
-      if(err) reject(err)
-      else resolve(res[0].map(item=>[item.time, item.quantity]))
     })
   })
 }
@@ -107,24 +33,35 @@ async function findItem(item, res){
   res.json(result);
 }
 async function itemSalesHistory(filters, res){
-  console.log(filters)
+  // validate input
+  // does the server exist?
+  // is the date range valid
+  // is this item found in the date range
+
+  let { server, item, startDate, endDate } = filters
   let topSellers = await pool.query('CALL getTopItemSellers(?, ?, ?, ?)', [`${filters.server}`, `${filters.item}`, `${filters.startDate}`, `${filters.endDate}`])
   let sales = await pool.query(`CALL getSales(?, ?, ?, ?)`, [`${filters.server}`, `${filters.item}`, `${filters.startDate}`, `${filters.endDate}`])
-  let marketValue = await callGetMarketValue(filters)
+  let marketValue = await callProcedure('getTotalMarketValue', {server, startDate, endDate})
   let itemMarketValue = await pool.query(`CALL getTotalItemMarketValue(?, ?, ?, ?)`, [`${filters.server}`, `${filters.item}`, `${filters.startDate}`, `${filters.endDate}`])
-  res.json({topN:topSellers[0], sales:sales[0], marketValue:marketValue[0], itemMarketValue:itemMarketValue[0]}); //[0] excludes okpacket
+  res.json({topN:topSellers[0], sales:sales[0], marketValue:marketValue, itemMarketValue:itemMarketValue[0]}); //[0] excludes okpacket
 }
 async function getInfo(sql, res){
   var result = await pool.query(sql)
   res.json(result[0]); //[0] excludes okpacket
 }
 async function getMarketTable(filters, res){
-  let data = await callMarketTree(filters)
+  // validate input
+  // does the server exist?
+  // is the date range valid?
+  
+  let data = await callProcedure('marketTree', filters)
   let customCategory = await callCustomCategory()
-  let quantities = await callGetQuantities(filters)
-  let totals = await callGetMarketTotals(filters)
-  let topSellers = await callGetTopSellers(filters)
-  let topItems = await callGetTopItems(filters)
+  let quantities = await callProcedure('getQuantities', filters)
+  let totals = await callProcedure('getMarketTotals', filters)
+  let topSellers = await callProcedure('getTopSellers', filters)
+  let topItems = await callProcedure('getTopItems', filters)
+  quantities = quantities.map(item=>[item.time, item.quantity])
+  totals = totals[0]
   customCategory = customCategory.map(category=>Object.values(category))
   normalizedData = []
   data.forEach(sale => {
@@ -156,12 +93,20 @@ async function getMarketTable(filters, res){
 }
 
 async function getSellerTable(filters, res){
-  let sellerRank = await callSellerRank(filters)
-  let marketValue = await callGetMarketValue(filters)
+  // validate input
+  // does the server exist?
+  // is the date range valid?
+  // is the name found in that range?
+
+  let { server, name, startDate, endDate } = filters
+  let sellerRank = await callProcedure('sellerRank', filters)
+  let marketValue = await callProcedure('getTotalMarketValue', {server, startDate, endDate})
   let customCategory = await callCustomCategory()
-  let quantities = await callGetSellersQuantities(filters)
-  let data = await callSellersTree(filters)
-  let sellersItems = await callSellersItems(filters)
+  let quantities = await callProcedure('getSellersQuantities', filters)
+  let data = await callProcedure('sellersTree', filters)
+  let sellersItems = await callProcedure('getSellersItems', filters)
+  quantities = quantities.map(item=>[item.time, item.quantity])
+  sellerRank = sellerRank[0]
   customCategory = customCategory.map(category=>Object.values(category))
   normalizedData = []
   data.forEach(sale => {
@@ -186,12 +131,37 @@ async function getSellerTable(filters, res){
   res.json({
     revenue: sellerRank.revenue,
     rank: sellerRank.rank,
-    percentage: (sellerRank.revenue/(marketValue[0][0].total/10000))*100,
+    percentage: (sellerRank.revenue/(marketValue[0].total/10000))*100,
     sellersTree: [["Item", "Parent", "Price", "Quantity"], [filters.name, null, 0, 0], ...headers, ...normalizedData],
     sellersItems,
     quantities
   })
 }
+
+function callItemList(){
+  return new Promise((resolve, reject)=>{
+    pool.query(`CALL itemList()`, (err, res)=>{
+      resolve(res[0].map(item=>item.string))
+    })
+  })
+}
+async function itemList(res){
+  let items = await callItemList()
+  res.json(items)
+}
+
+function callSellerList(){
+  return new Promise((resolve, reject)=>{
+    pool.query(`CALL sellerList()`, (err, res)=>{
+      resolve(res[0].map(seller=>[seller.name, seller.servername]))
+    })
+  })
+}
+async function sellerList(res){
+  let sellers = await callSellerList()
+  res.json(sellers)
+}
+
 
 /*Frontend Requests*/
 router.get('/serverinfo', function(req, res, next) {
@@ -200,6 +170,12 @@ router.get('/serverinfo', function(req, res, next) {
 router.get('/topN', function(req, res, next) {
   getInfo('CALL topN', res);
 });
+router.get('/itemList', (req, res)=>{
+  itemList(res)
+})
+router.get('/sellerList', (req, res)=>{
+  sellerList(res)
+})
 router.post('/itemSearch', function(req, res){
   findItem(req.body.search, res);
 });
