@@ -8,4 +8,5 @@ ENV DB_USER .
 ENV DB_PASSWORD .
 ENV DB_DATABASE .
 RUN npm install --only=production
+EXPOSE 443
 CMD npm start
