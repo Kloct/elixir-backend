@@ -2,7 +2,6 @@ var express = require('express');
 var pool = require('./database')
 
 var router = express.Router();
-var app = express();
 
 function dateRangeValidate(startDate, endDate){
   // are dates are formatted correctly

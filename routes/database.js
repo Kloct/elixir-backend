@@ -1,14 +1,18 @@
 var mysql = require('mysql'),
-    util = require('util'),
-    dbkeys = require ('../dbkeys.json')
+    util = require('util')
     
-var pool = mysql.createPool({
-    connectionLimit: 10,
-    host: dbkeys.host,
-    user: dbkeys.user,
-    password: dbkeys.password,
-    database: dbkeys.database
-})
+let config = {}
+if (process.env.NODE_ENV === 'production'){
+    config = {
+        connectionLimit: 10,
+        host: process.env.DB_HOST,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_DATABASE
+    }
+} else config = require('../dbkeys')
+
+var pool = mysql.createPool(config)
 
 pool.getConnection((err, connection) => {
     if (err) {
